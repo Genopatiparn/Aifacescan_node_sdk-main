@@ -78,9 +78,7 @@ function startServer(port = 8989) {
         }
     });
 
-    server.listen(port, () => {
-        console.log(`Device server running on port ${port}`);
-    });
+    server.listen(port, () => {});
 };
 
 function heartbeat() {

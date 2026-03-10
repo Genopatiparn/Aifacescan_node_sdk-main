@@ -2,7 +2,6 @@
 
 import moment from 'moment'
 import ClientManager from './client.js'
-
 import fs from 'fs';
 
 /**
@@ -10,7 +9,7 @@ import fs from 'fs';
  * @param {Websocket} ws 
  * @param {String} msg 
  */
-function wsMessageManager(ws, msg) {
+async function wsMessageManager(ws, msg) {
     try {
 
         var time = moment().format('YYYY-MM-DD HH:mm:ss');
@@ -55,6 +54,71 @@ function wsMessageManager(ws, msg) {
                             console.error('save sendlog error ', err);
                         }
                     });
+
+                    // บันทึก attendance ลง database
+                    const logs = msg.data || msg.record || [];
+                    if (logs.length > 0) {
+                        for (const record of logs) {
+                            try {
+                                let image_url = "";
+                                
+                                // บันทึกรูปภาพ
+                                if (record.image) {
+                                    try {
+                                        const uploadDir = './uploads/attendance';
+                                        if (!fs.existsSync(uploadDir)) {
+                                            fs.mkdirSync(uploadDir, { recursive: true });
+                                        }
+
+                                        const timestamp = moment(record.time).format('YYYYMMDDHHmmss');
+                                        const filename = `${record.enrollid}_${timestamp}.jpg`;
+                                        const filepath = `${uploadDir}/${filename}`;
+
+                                        const imageBuffer = Buffer.from(record.image, 'base64');
+                                        fs.writeFileSync(filepath, imageBuffer);
+
+                                        image_url = filepath;
+                                        
+                                        console.log(`Saved image: ${filepath}`);
+                                    } catch (imgError) {
+                                        console.error('Error saving image:', imgError.message);
+                                    }
+                                }
+
+                                // บันทึกลง database
+                                try {
+                                    const { isDatabaseConnected } = await import('./database.js');
+                                    const { Attendance, Device } = await import('./models.js');
+                                    
+                                    if (isDatabaseConnected()) {
+                                        // ดึง gate_type จาก device
+                                        let gate_type = 'in-out';
+                                        try {
+                                            const device = await Device.findOne({ sn: msg.sn });
+                                            if (device && device.gate_type) {
+                                                gate_type = device.gate_type;
+                                            }
+                                        } catch (err) {
+                                            console.log('Device not found, using default gate_type');
+                                        }
+
+                                        await Attendance.create({
+                                            enrollid: record.enrollid || 0,
+                                            sn: msg.sn,
+                                            timestamp: new Date(record.time || Date.now()),
+                                            image_url: image_url,
+                                            gate_type: gate_type
+                                        });
+                                        console.log(`Saved to DB: enrollid ${record.enrollid}, gate_type: ${gate_type}`);
+                                    }
+                                } catch (dbError) {
+                                    console.error('DB error:', dbError.message);
+                                }
+                            } catch (error) {
+                                console.error('Error:', error.message);
+                            }
+                        }
+                    }
 
                     resMsg = {
                         ret: 'sendlog',
