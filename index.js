@@ -29,17 +29,31 @@ async function downloadImageAsBase64(imageUrl) {
             finalUrl = backendUrl + pathPart;
         }
         
-        const response = await axios.get(finalUrl, {
-            responseType: 'arraybuffer',
-            timeout: 10000
-        });
-        return Buffer.from(response.data).toString('base64');
-    } catch (error) {
-        console.error(`Failed to download image from ${finalUrl}:`, error.message);
-        if (error.response) {
-            console.error(`Status: ${error.response.status}`);
-            console.error(`URL tried: ${finalUrl}`);
+        // ลองหลายนามสกุล
+        const urlsToTry = [
+            finalUrl,
+            finalUrl + '.jpg',
+            finalUrl + '.jpeg',
+            finalUrl + '.png'
+        ];
+        
+        for (const url of urlsToTry) {
+            try {
+                const response = await axios.get(url, {
+                    responseType: 'arraybuffer',
+                    timeout: 10000
+                });
+                console.log(`[IMAGE] Downloaded successfully from: ${url}`);
+                return Buffer.from(response.data).toString('base64');
+            } catch (err) {
+                // ลองต่อไป
+                continue;
+            }
         }
+        
+        throw new Error(`Failed to download image from any URL variant of: ${finalUrl}`);
+    } catch (error) {
+        console.error(`Failed to download image:`, error.message);
         throw error;
     }
 }

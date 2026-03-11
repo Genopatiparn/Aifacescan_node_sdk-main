@@ -61,25 +61,41 @@ async function wsMessageManager(ws, msg) {
                         for (const record of logs) {
                             try {
                                 let image_url = "";
-                                
-                                // บันทึกรูปภาพ
+
                                 if (record.image) {
                                     try {
-                                        const uploadDir = './uploads/attendance';
-                                        if (!fs.existsSync(uploadDir)) {
-                                            fs.mkdirSync(uploadDir, { recursive: true });
-                                        }
-
                                         const timestamp = moment(record.time).format('YYYYMMDDHHmmss');
                                         const filename = `${record.enrollid}_${timestamp}.jpg`;
-                                        const filepath = `${uploadDir}/${filename}`;
-
                                         const imageBuffer = Buffer.from(record.image, 'base64');
-                                        fs.writeFileSync(filepath, imageBuffer);
 
-                                        image_url = filepath;
-                                        
-                                        console.log(`Saved image: ${filepath}`);
+                                        if (process.env.UPLOAD_ATTENDANCE_TO_SERVER === 'true' && process.env.BACKEND_URL) {
+                                            try {
+                                                const axios = (await import('axios')).default;
+                                                const FormData = (await import('form-data')).default;
+                                                
+                                                const formData = new FormData();
+                                                formData.append('file', imageBuffer, filename);
+                                                formData.append('enrollid', record.enrollid);
+                                                formData.append('timestamp', timestamp);
+                                                
+                                                const uploadUrl = `${process.env.BACKEND_URL}/api/upload-attendance`;
+                                                const response = await axios.post(uploadUrl, formData, {
+                                                    headers: formData.getHeaders(),
+                                                    timeout: 10000
+                                                });
+                                                
+                                                if (response.data && response.data.url) {
+                                                    image_url = response.data.url;
+                                                    // แก้ไข URL ถ้าไม่มี /facetime_v2
+                                                    if (!image_url.includes('/facetime_v2/') && image_url.includes('/uploads/')) {
+                                                        image_url = image_url.replace('/uploads/', '/facetime_v2/uploads/');
+                                                    }
+                                                    console.log(`Uploaded to server: ${image_url}`);
+                                                }
+                                            } catch (uploadError) {
+                                                console.error('Upload to server failed:', uploadError.message);
+                                            }
+                                        }
                                     } catch (imgError) {
                                         console.error('Error saving image:', imgError.message);
                                     }
