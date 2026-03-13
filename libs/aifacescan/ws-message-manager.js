@@ -55,7 +55,6 @@ async function wsMessageManager(ws, msg) {
                         }
                     });
 
-                    // บันทึก attendance ลง database
                     const logs = msg.data || msg.record || [];
                     if (logs.length > 0) {
                         for (const record of logs) {
@@ -101,34 +100,28 @@ async function wsMessageManager(ws, msg) {
                                     }
                                 }
 
-                                // บันทึกลง database
-                                try {
-                                    const { isDatabaseConnected } = await import('./database.js');
-                                    const { Attendance, Device } = await import('./models.js');
-                                    
-                                    if (isDatabaseConnected()) {
-                                        // ดึง gate_type จาก device
-                                        let gate_type = 'in-out';
-                                        try {
-                                            const device = await Device.findOne({ sn: msg.sn });
-                                            if (device && device.gate_type) {
-                                                gate_type = device.gate_type;
-                                            }
-                                        } catch (err) {
-                                            console.log('Device not found, using default gate_type');
-                                        }
-
-                                        await Attendance.create({
+                                // ส่งข้อมูล attendance ไปที่ backend
+                                if (process.env.BACKEND_URL) {
+                                    try {
+                                        const axios = (await import('axios')).default;
+                                        
+                                        const attendanceData = {
                                             enrollid: record.enrollid || 0,
                                             sn: msg.sn,
-                                            timestamp: new Date(record.time || Date.now()),
-                                            image_url: image_url,
-                                            gate_type: gate_type
+                                            timestamp: record.time || new Date().toISOString(),
+                                            image_url: image_url
+                                        };
+                                        
+                                        const saveUrl = `${process.env.BACKEND_URL}/api/save-attendance`;
+                                        await axios.post(saveUrl, attendanceData, {
+                                            headers: { 'Content-Type': 'application/json' },
+                                            timeout: 10000
                                         });
-                                        console.log(`Saved to DB: enrollid ${record.enrollid}, gate_type: ${gate_type}`);
+                                        
+                                        console.log(`Sent attendance to backend: enrollid ${record.enrollid}`);
+                                    } catch (saveError) {
+                                        console.error('Failed to send attendance to backend:', saveError.message);
                                     }
-                                } catch (dbError) {
-                                    console.error('DB error:', dbError.message);
                                 }
                             } catch (error) {
                                 console.error('Error:', error.message);

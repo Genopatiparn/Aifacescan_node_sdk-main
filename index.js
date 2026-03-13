@@ -283,6 +283,8 @@ async function processFromDatabase() {
                             imageBase64 = await imageToBase64(employee.picture);
                         }
                         
+                        console.log(`Sending photo for enrollid ${employee.enrollid}, size: ${imageBase64.length} bytes`);
+                        
                         let result = await aifacescan.setUserinfo(
                             device.ws,
                             employee.name,
@@ -291,13 +293,19 @@ async function processFromDatabase() {
                             employee.device_admin,
                             imageBase64
                         );
+                        
+                        console.log(`Photo result for enrollid ${employee.enrollid}:`, JSON.stringify(result));
+                        
                         if (!result || !result.result) {
                             success = false;
-                            errorMsg = 'Photo upload failed';
+                            errorMsg = `Photo upload failed: ${JSON.stringify(result)}`;
+                        } else {
+                            console.log(` Photo uploaded successfully for enrollid ${employee.enrollid}`);
                         }
                     } catch (err) {
                         success = false;
                         errorMsg = `Photo error: ${err.message || err}`;
+                        console.error(` Photo error for enrollid ${employee.enrollid}:`, err);
                     }
                 }
 
